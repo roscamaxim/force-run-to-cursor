@@ -49,6 +49,10 @@ This extension does not contribute any settings.
 
 ## Release Notes
 
+### 0.1.1
+
+- Improve extension description
+
 ### 0.1.0
 
 - Add "Run to Cursor" and "Force Run to Cursor" buttons to the debug toolbar

@@ -1,8 +1,8 @@
 {
   "name": "force-run-to-cursor",
   "displayName": "Force Run to Cursor",
-  "description": "Temporarily disables all breakpoints, runs execution to the current cursor line, then automatically restores your breakpoints when the debugger stops -- a PyCharm-style \"Force Run to Cursor\" workflow in VS Code.",
-  "version": "0.1.0",
+  "description": "Runs to the cursor without hitting breakpoints — automatically disables breakpoints before running and restores them when the debugger stops. A JetBrains-style \"Force Run to Cursor\" for VS Code.",
+  "version": "0.1.1",
   "license": "MIT",
   "publisher": "roscamaxim",
   "repository": {
