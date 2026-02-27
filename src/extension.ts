@@ -1,84 +1,98 @@
 import * as vscode from 'vscode';
 
-/**
- * Tracks which debug sessions are currently in a "force run" window,
- * meaning we temporarily disabled breakpoints and must restore them
- * when the debugger next stops/terminates/exits.
- */
-export const pendingRestore = new Set<string>();
+/** Maps session ID → breakpoints removed during a force-run, pending restoration. */
+export const pendingRestore = new Map<string, readonly vscode.Breakpoint[]>();
 
+/** Dependency injection for {@link forceRunToCursorImpl}. */
 export type ForceDeps = {
   commands: { executeCommand: (cmd: string, ...args: any[]) => Thenable<any> };
   window: { showInformationMessage: (msg: string) => Thenable<any> | void };
+  debug: {
+    breakpoints: readonly vscode.Breakpoint[];
+    removeBreakpoints: (bps: readonly vscode.Breakpoint[]) => void;
+  };
 };
 
+/** Dependency injection for {@link maybeRestoreOnAdapterEvent}. */
 export type RestoreDeps = {
-  commands: { executeCommand: (cmd: string, ...args: any[]) => Thenable<any> };
+  debug: {
+    breakpoints: readonly vscode.Breakpoint[];
+    addBreakpoints: (bps: readonly vscode.Breakpoint[]) => void;
+    removeBreakpoints: (bps: readonly vscode.Breakpoint[]) => void;
+  };
 };
 
 /**
- * Core implementation: disable all breakpoints, mark restore pending,
- * then run to cursor.
+ * Wipe any current breakpoints (orphaned temp BPs from `runToCursor`)
+ * then re-add the saved set.
+ */
+function restoreBreakpoints(
+  debug: RestoreDeps['debug'],
+  saved: readonly vscode.Breakpoint[],
+): void {
+  const leftover = debug.breakpoints;
+  if (leftover.length > 0) {
+    debug.removeBreakpoints(leftover);
+  }
+  debug.addBreakpoints(saved);
+}
+
+/**
+ * Remove all breakpoints, then run to cursor.
  *
- * Exported for unit testing.
+ * Breakpoints are removed (not disabled) so that "Run to Cursor" can set a
+ * fresh temp breakpoint even on lines that already have one.
  */
 export async function forceRunToCursorImpl(
   session: { id: string } | undefined,
-  deps: ForceDeps = { commands: vscode.commands, window: vscode.window },
-  restoreSet: Set<string> = pendingRestore,
+  deps: ForceDeps = { commands: vscode.commands, window: vscode.window, debug: vscode.debug },
+  restoreMap: Map<string, readonly vscode.Breakpoint[]> = pendingRestore,
 ): Promise<void> {
   if (!session) {
-    await Promise.resolve(
-      deps.window.showInformationMessage(
-        'Start debugging and pause first, then use Force Run to Cursor.',
-      ),
+    deps.window.showInformationMessage(
+      'Start debugging and pause first, then use Force Run to Cursor.',
     );
     return;
   }
 
-  // 1) Disable all breakpoints (this does NOT delete them)
-  await deps.commands.executeCommand('workbench.debug.viewlet.action.disableAllBreakpoints');
+  // Ignore if already mid-force-run to avoid overwriting saved breakpoints.
+  if (restoreMap.has(session.id)) {
+    return;
+  }
 
-  // 2) Mark that we need to restore later (after next stop/terminate/exited)
-  restoreSet.add(session.id);
+  const saved = [...deps.debug.breakpoints];
+  deps.debug.removeBreakpoints(saved);
+  restoreMap.set(session.id, saved);
 
-  // 3) Run to cursor (caret line)
   await deps.commands.executeCommand('editor.debug.action.runToCursor');
 }
 
 /**
- * Restore helper: if we're pending restore for this session, and we see a stop-like
- * debug adapter event, re-enable all breakpoints and clear the pending flag.
+ * On a DAP `stopped` event, restore saved breakpoints for this session.
  *
- * Returns true if a restore happened.
+ * Only triggers on `stopped` (adapter still alive). Terminal events are
+ * handled by the `onDidTerminateDebugSession` safety net in {@link activate}.
  *
- * Exported for unit testing.
+ * @returns `true` if breakpoints were restored.
  */
 export async function maybeRestoreOnAdapterEvent(
   sessionId: string,
   msg: any,
-  deps: RestoreDeps = { commands: vscode.commands },
-  restoreSet: Set<string> = pendingRestore,
+  deps: RestoreDeps = { debug: vscode.debug },
+  restoreMap: Map<string, readonly vscode.Breakpoint[]> = pendingRestore,
 ): Promise<boolean> {
-  if (!restoreSet.has(sessionId)) {
+  const saved = restoreMap.get(sessionId);
+  if (!saved || msg?.type !== 'event' || msg.event !== 'stopped') {
     return false;
   }
 
-  const isStopLike =
-    msg?.type === 'event' &&
-    (msg.event === 'stopped' || msg.event === 'terminated' || msg.event === 'exited');
-
-  if (!isStopLike) {
-    return false;
-  }
-
-  restoreSet.delete(sessionId);
-  await deps.commands.executeCommand('workbench.debug.viewlet.action.enableAllBreakpoints');
+  restoreMap.delete(sessionId);
+  restoreBreakpoints(deps.debug, saved);
   return true;
 }
 
 export function activate(context: vscode.ExtensionContext) {
-  // Observe debug adapter events so we can restore breakpoints when execution stops.
+  // Restore breakpoints when the debugger stops (primary path).
   context.subscriptions.push(
     vscode.debug.registerDebugAdapterTrackerFactory('*', {
       createDebugAdapterTracker(session) {
@@ -91,24 +105,30 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  // Safety net: if the session terminates without us seeing the expected adapter event,
-  // restore breakpoints anyway.
+  // Safety net: restore if the session ends without a `stopped` event
+  // (e.g. program finishes or crashes).
   context.subscriptions.push(
-    vscode.debug.onDidTerminateDebugSession(async session => {
-      if (!pendingRestore.has(session.id)) {
+    vscode.debug.onDidTerminateDebugSession(session => {
+      const saved = pendingRestore.get(session.id);
+      if (!saved) {
         return;
       }
-
       pendingRestore.delete(session.id);
-      await vscode.commands.executeCommand('workbench.debug.viewlet.action.enableAllBreakpoints');
+      restoreBreakpoints(vscode.debug, saved);
     }),
   );
 
-  // Command entry point.
+  // Wrapper for built-in Run to Cursor (for custom toolbar icon).
   context.subscriptions.push(
-    vscode.commands.registerCommand('extension.forceRunToCursor', async () => {
-      await forceRunToCursorImpl(vscode.debug.activeDebugSession ?? undefined);
-    }),
+    vscode.commands.registerCommand('runToCursor.run', () =>
+      vscode.commands.executeCommand('editor.debug.action.runToCursor'),
+    ),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('runToCursor.force', () =>
+      forceRunToCursorImpl(vscode.debug.activeDebugSession ?? undefined),
+    ),
   );
 }
 

@@ -1,26 +1,78 @@
 {
   "name": "force-run-to-cursor",
   "displayName": "Force Run to Cursor",
-  "description": "Force Run to Cursor adds a single command that temporarily disables all breakpoints, runs execution to the current cursor line, then automatically restores your breakpoints when the debugger stops—giving you a PyCharm-style “Force Run to Cursor” workflow in VS Code.",
-  "version": "0.0.1",
+  "description": "Temporarily disables all breakpoints, runs execution to the current cursor line, then automatically restores your breakpoints when the debugger stops -- a PyCharm-style \"Force Run to Cursor\" workflow in VS Code.",
+  "version": "0.1.0",
   "license": "MIT",
+  "publisher": "roscamaxim",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/roscamaxim/force-run-to-cursor.git"
+  },
+  "homepage": "https://github.com/roscamaxim/force-run-to-cursor#readme",
+  "bugs": {
+    "url": "https://github.com/roscamaxim/force-run-to-cursor/issues"
+  },
+  "icon": "images/icon.png",
   "engines": {
     "vscode": "^1.109.0"
   },
   "categories": [
-    "Other"
+    "Debuggers"
+  ],
+  "keywords": [
+    "debug",
+    "breakpoint",
+    "run to cursor",
+    "force run",
+    "pycharm"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onDebug"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "extension.forceRunToCursor",
-        "title": "Debug: Force Run to Cursor"
+        "command": "runToCursor.run",
+        "title": "Run to Cursor",
+        "category": "Debug",
+        "icon": {
+          "light": "media/light/run-to-cursor.svg",
+          "dark": "media/dark/run-to-cursor.svg"
+        }
+      },
+      {
+        "command": "runToCursor.force",
+        "title": "Force Run to Cursor",
+        "category": "Debug",
+        "icon": {
+          "light": "media/light/force-run-to-cursor.svg",
+          "dark": "media/dark/force-run-to-cursor.svg"
+        }
       }
-    ]
+    ],
+    "menus": {
+      "debug/toolBar": [
+        {
+          "command": "runToCursor.run",
+          "when": "inDebugMode",
+          "group": "navigation@1"
+        },
+        {
+          "command": "runToCursor.force",
+          "when": "inDebugMode",
+          "group": "navigation@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "runToCursor.force",
+          "when": "inDebugMode",
+          "group": "debug@3"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
