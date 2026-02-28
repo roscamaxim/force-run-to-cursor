@@ -2,7 +2,7 @@
   "name": "force-run-to-cursor",
   "displayName": "Force Run to Cursor",
   "description": "Runs to the cursor without hitting breakpoints — automatically disables breakpoints before running and restores them when the debugger stops. A JetBrains-style \"Force Run to Cursor\" for VS Code.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "license": "MIT",
   "publisher": "roscamaxim",
   "repository": {
@@ -95,6 +95,9 @@
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
     "test": "vscode-test"
+  },
+  "overrides": {
+    "serialize-javascript": ">=7.0.3"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",

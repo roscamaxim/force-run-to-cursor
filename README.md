@@ -6,7 +6,7 @@ A tiny VS Code extension that adds **Debug: Force Run to Cursor** — run until 
 
 ## Features
 
-- **Debug: Force Run to Cursor** — temporarily removes all breakpoints, runs to cursor, then restores breakpoints when the debugger stops or the session terminates.
+- **Debug: Force Run to Cursor** — temporarily removes all breakpoints and suppresses exception breakpoints, runs to cursor, then restores everything when the debugger stops or the session terminates. Explicit `breakpoint()` / `debugger` statements and manual pause still stop execution (matching JetBrains behavior).
 - **Debug: Run to Cursor** — a thin wrapper around VS Code's built-in Run to Cursor, exposed so it can appear in the debug toolbar with a custom icon.
 - **Debug toolbar buttons** — both commands appear as icon buttons in the debug toolbar during active debug sessions.
 - **Right-click context menu** — "Force Run to Cursor" is available in the editor context menu while debugging.
@@ -28,8 +28,9 @@ A tiny VS Code extension that adds **Debug: Force Run to Cursor** — run until 
    - **Command Palette** → `Debug: Force Run to Cursor`
 
 To cancel a force-run in progress and restore breakpoints immediately:
-   - Click the **Force Run Active** status bar item
-   - **Command Palette** → `Debug: Cancel Force Run (Restore Breakpoints)`
+
+- Click the **Force Run Active** status bar item
+- **Command Palette** → `Debug: Cancel Force Run (Restore Breakpoints)`
 
 ### Optional: Keybinding
 
@@ -49,11 +50,15 @@ This extension does not contribute any settings.
 
 ## Known Issues/Limitations
 
-- Does not suppress exception breaks or explicit pause triggers (breakpoint(), etc.).
-- Execution may stop before the cursor line for other reasons; if it does, breakpoints are restored at that stop.
 - Toolbar buttons appear before the built-in debug buttons (VS Code does not allow intermixing extension buttons with built-in ones).
 
 ## Release Notes
+
+### 0.3.0
+
+- Suppress exception breakpoints during force-run (caught exceptions no longer interrupt force-run, matching JetBrains behavior)
+- Auto-continue on exception stops as defense-in-depth for non-compliant debug adapters (safety counter prevents infinite loops)
+- Fix `serialize-javascript` RCE vulnerability (CVE in transitive dependency via mocha)
 
 ### 0.2.0
 
