@@ -1,7 +1,17 @@
 import * as vscode from 'vscode';
 
 /** Maps session ID → breakpoints removed during a force-run, pending restoration. */
-export const pendingRestore = new Map<string, readonly vscode.Breakpoint[]>();
+const pendingRestore = new Map<string, readonly vscode.Breakpoint[]>();
+
+/** Type guard: checks if a breakpoint is a SourceBreakpoint (has a `location` property). */
+export function isSourceBreakpoint(bp: vscode.Breakpoint): bp is vscode.SourceBreakpoint {
+  return 'location' in bp;
+}
+
+/** Type guard: checks if a breakpoint is a FunctionBreakpoint (has a `functionName` property). */
+export function isFunctionBreakpoint(bp: vscode.Breakpoint): bp is vscode.FunctionBreakpoint {
+  return 'functionName' in bp;
+}
 
 /** Dependency injection for {@link forceRunToCursorImpl}. */
 export type ForceDeps = {
@@ -25,6 +35,10 @@ export type RestoreDeps = {
 /**
  * Wipe any current breakpoints (orphaned temp BPs from `runToCursor`)
  * then re-add the saved set.
+ *
+ * Supports all breakpoint subtypes: SourceBreakpoint, FunctionBreakpoint,
+ * InlineBreakpoint, and DataBreakpoint. Each is saved and restored as-is
+ * since `addBreakpoints`/`removeBreakpoints` accept the base `Breakpoint` type.
  */
 function restoreBreakpoints(
   debug: RestoreDeps['debug'],
@@ -91,7 +105,38 @@ export async function maybeRestoreOnAdapterEvent(
   return true;
 }
 
+/**
+ * Cancel all pending force-runs, restoring breakpoints for every tracked session.
+ */
+export function cancelAllPendingRestores(
+  deps: RestoreDeps = { debug: vscode.debug },
+  restoreMap: Map<string, readonly vscode.Breakpoint[]> = pendingRestore,
+): void {
+  for (const [, saved] of restoreMap) {
+    restoreBreakpoints(deps.debug, saved);
+  }
+  restoreMap.clear();
+}
+
 export function activate(context: vscode.ExtensionContext) {
+  // Status bar item shown while a force-run is active.
+  const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
+  statusBarItem.text = '$(debug-stop) Force Run Active';
+  statusBarItem.tooltip = 'Click to cancel and restore breakpoints';
+  statusBarItem.command = 'runToCursor.cancelForceRun';
+  statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+  context.subscriptions.push(statusBarItem);
+
+  function updateStatusBar() {
+    if (pendingRestore.size > 0) {
+      statusBarItem.show();
+      vscode.commands.executeCommand('setContext', 'forceRunToCursor.isActive', true);
+    } else {
+      statusBarItem.hide();
+      vscode.commands.executeCommand('setContext', 'forceRunToCursor.isActive', false);
+    }
+  }
+
   // Restore breakpoints when the debugger stops (primary path).
   context.subscriptions.push(
     vscode.debug.registerDebugAdapterTrackerFactory('*', {
@@ -99,6 +144,7 @@ export function activate(context: vscode.ExtensionContext) {
         return {
           onDidSendMessage: async (msg: any) => {
             await maybeRestoreOnAdapterEvent(session.id, msg);
+            updateStatusBar();
           },
         };
       },
@@ -115,6 +161,15 @@ export function activate(context: vscode.ExtensionContext) {
       }
       pendingRestore.delete(session.id);
       restoreBreakpoints(vscode.debug, saved);
+      updateStatusBar();
+    }),
+  );
+
+  // Cancel all pending force-runs.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('runToCursor.cancelForceRun', () => {
+      cancelAllPendingRestores();
+      updateStatusBar();
     }),
   );
 
@@ -126,9 +181,10 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('runToCursor.force', () =>
-      forceRunToCursorImpl(vscode.debug.activeDebugSession ?? undefined),
-    ),
+    vscode.commands.registerCommand('runToCursor.force', async () => {
+      await forceRunToCursorImpl(vscode.debug.activeDebugSession ?? undefined);
+      updateStatusBar();
+    }),
   );
 }
 

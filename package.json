@@ -2,7 +2,7 @@
   "name": "force-run-to-cursor",
   "displayName": "Force Run to Cursor",
   "description": "Runs to the cursor without hitting breakpoints — automatically disables breakpoints before running and restores them when the debugger stops. A JetBrains-style \"Force Run to Cursor\" for VS Code.",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "license": "MIT",
   "publisher": "roscamaxim",
   "repository": {
@@ -30,7 +30,7 @@
   "activationEvents": [
     "onDebug"
   ],
-  "main": "./out/extension.js",
+  "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
@@ -50,6 +50,11 @@
           "light": "media/light/force-run-to-cursor.svg",
           "dark": "media/dark/force-run-to-cursor.svg"
         }
+      },
+      {
+        "command": "runToCursor.cancelForceRun",
+        "title": "Cancel Force Run (Restore Breakpoints)",
+        "category": "Debug"
       }
     ],
     "menus": {
@@ -71,25 +76,35 @@
           "when": "inDebugMode",
           "group": "debug@3"
         }
+      ],
+      "commandPalette": [
+        {
+          "command": "runToCursor.cancelForceRun",
+          "when": "forceRunToCursor.isActive"
+        }
       ]
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run bundle",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
+    "compile:check": "tsc --noEmit",
+    "bundle": "npm run compile:check && node esbuild.js --production",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.109.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
-    "typescript-eslint": "^8.54.0",
+    "@types/vscode": "^1.109.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
+    "esbuild": "^0.25.12",
     "eslint": "^9.39.2",
     "typescript": "^5.9.3",
-    "@vscode/test-cli": "^0.0.12",
-    "@vscode/test-electron": "^2.5.2"
+    "typescript-eslint": "^8.54.0"
   }
 }

@@ -10,6 +10,8 @@ A tiny VS Code extension that adds **Debug: Force Run to Cursor** — run until 
 - **Debug: Run to Cursor** — a thin wrapper around VS Code's built-in Run to Cursor, exposed so it can appear in the debug toolbar with a custom icon.
 - **Debug toolbar buttons** — both commands appear as icon buttons in the debug toolbar during active debug sessions.
 - **Right-click context menu** — "Force Run to Cursor" is available in the editor context menu while debugging.
+- **Cancellation support** — while the debugger is running toward the cursor (e.g. during a long-running operation), a "Force Run Active" status bar item appears. Click it or use the Command Palette to cancel and restore breakpoints immediately.
+- **All breakpoint types** — correctly saves and restores source breakpoints, function breakpoints, inline breakpoints, and data breakpoints.
 - **PyCharm-inspired icons** — uses the same color scheme as JetBrains IDEs (blue for Run to Cursor, red for Force Run to Cursor) for cross-IDE familiarity.
 
 ## Requirements
@@ -24,6 +26,10 @@ A tiny VS Code extension that adds **Debug: Force Run to Cursor** — run until 
    - Click the **toolbar button** in the debug toolbar
    - **Right-click** in the editor and select **Force Run to Cursor**
    - **Command Palette** → `Debug: Force Run to Cursor`
+
+To cancel a force-run in progress and restore breakpoints immediately:
+   - Click the **Force Run Active** status bar item
+   - **Command Palette** → `Debug: Cancel Force Run (Restore Breakpoints)`
 
 ### Optional: Keybinding
 
@@ -48,6 +54,13 @@ This extension does not contribute any settings.
 - Toolbar buttons appear before the built-in debug buttons (VS Code does not allow intermixing extension buttons with built-in ones).
 
 ## Release Notes
+
+### 0.2.0
+
+- Add status bar indicator with cancellation support during active force-runs
+- Add `Debug: Cancel Force Run (Restore Breakpoints)` command
+- Switch to esbuild bundler for smaller and faster builds
+- Improve breakpoint type handling with explicit support for all subtypes
 
 ### 0.1.3
 

@@ -1,9 +1,25 @@
 import * as assert from 'assert';
-import { forceRunToCursorImpl, maybeRestoreOnAdapterEvent } from '../extension';
+import {
+  forceRunToCursorImpl,
+  maybeRestoreOnAdapterEvent,
+  cancelAllPendingRestores,
+  isSourceBreakpoint,
+  isFunctionBreakpoint,
+} from '../src/extension';
 
 /** Fake breakpoint for testing (mirrors vscode.Breakpoint shape). */
 function fakeBp(id: string) {
   return { id } as any;
+}
+
+/** Fake SourceBreakpoint with a `location` property (duck-typed). */
+function fakeSourceBp(id: string) {
+  return { id, location: { uri: 'file:///test.ts', range: {} } } as any;
+}
+
+/** Fake FunctionBreakpoint with a `functionName` property (duck-typed). */
+function fakeFunctionBp(id: string) {
+  return { id, functionName: 'myFunction' } as any;
 }
 
 /** Creates a mock RestoreDeps that tracks add/remove calls. */
@@ -265,5 +281,106 @@ suite('Force Run to Cursor - unit tests', () => {
 
     assert.strictEqual(added.length, 1, 'Should add breakpoints exactly once despite duplicate stops');
     assert.deepStrictEqual(added, bps);
+  });
+
+  // --- Breakpoint type guard tests ---
+
+  test('isSourceBreakpoint identifies breakpoints with location property', () => {
+    const srcBp = fakeSourceBp('src-1');
+    const fnBp = fakeFunctionBp('fn-1');
+    const plainBp = fakeBp('plain-1');
+
+    assert.strictEqual(isSourceBreakpoint(srcBp), true, 'SourceBreakpoint should be identified by location');
+    assert.strictEqual(isSourceBreakpoint(fnBp), false, 'FunctionBreakpoint should not be a SourceBreakpoint');
+    assert.strictEqual(isSourceBreakpoint(plainBp), false, 'Plain breakpoint should not be a SourceBreakpoint');
+  });
+
+  test('isFunctionBreakpoint identifies breakpoints with functionName property', () => {
+    const srcBp = fakeSourceBp('src-2');
+    const fnBp = fakeFunctionBp('fn-2');
+    const plainBp = fakeBp('plain-2');
+
+    assert.strictEqual(isFunctionBreakpoint(fnBp), true, 'FunctionBreakpoint should be identified by functionName');
+    assert.strictEqual(isFunctionBreakpoint(srcBp), false, 'SourceBreakpoint should not be a FunctionBreakpoint');
+    assert.strictEqual(isFunctionBreakpoint(plainBp), false, 'Plain breakpoint should not be a FunctionBreakpoint');
+  });
+
+  // --- Mixed breakpoint type tests ---
+
+  test('mixed breakpoint types (source + function) survive save/restore cycle', async () => {
+    const srcBp = fakeSourceBp('bp-src');
+    const fnBp = fakeFunctionBp('bp-fn');
+    const mixedBps = [srcBp, fnBp];
+
+    const calls: string[] = [];
+    const removed: any[] = [];
+    const deps = {
+      commands: {
+        executeCommand: async (cmd: string) => { calls.push(cmd); },
+      },
+      window: {
+        showInformationMessage: async (_msg: string) => {},
+      },
+      debug: {
+        breakpoints: mixedBps,
+        removeBreakpoints: (b: readonly any[]) => { removed.push(...b); },
+      },
+    };
+
+    const restoreMap = new Map<string, readonly any[]>();
+    const session = { id: 'sess-mixed' };
+
+    await forceRunToCursorImpl(session, deps, restoreMap);
+
+    assert.deepStrictEqual(removed, mixedBps, 'Should remove all breakpoint types');
+    assert.deepStrictEqual(restoreMap.get('sess-mixed'), mixedBps, 'Should save all breakpoint types');
+
+    // Restore via stopped event
+    const { deps: restoreDeps, added } = makeRestoreDeps();
+    await maybeRestoreOnAdapterEvent(
+      'sess-mixed',
+      { type: 'event', event: 'stopped' },
+      restoreDeps,
+      restoreMap,
+    );
+
+    assert.deepStrictEqual(added, mixedBps, 'Should restore all breakpoint types');
+    // Verify the restored breakpoints retain their type-discriminating properties
+    assert.strictEqual(isSourceBreakpoint(added[0]), true, 'Restored SourceBreakpoint retains location');
+    assert.strictEqual(isFunctionBreakpoint(added[1]), true, 'Restored FunctionBreakpoint retains functionName');
+  });
+
+  // Note: InlineBreakpoint and DataBreakpoint are also preserved by save/restore
+  // since they extend vscode.Breakpoint and are handled identically by
+  // addBreakpoints/removeBreakpoints. No special handling is required.
+
+  // --- Cancel command tests ---
+
+  test('cancelAllPendingRestores restores breakpoints from all sessions and clears state', () => {
+    const bps1 = [fakeBp('bp-c1'), fakeBp('bp-c2')];
+    const bps2 = [fakeBp('bp-c3')];
+
+    const restoreMap = new Map<string, readonly any[]>([
+      ['sess-cancel-1', bps1],
+      ['sess-cancel-2', bps2],
+    ]);
+
+    const { deps, added } = makeRestoreDeps();
+
+    cancelAllPendingRestores(deps, restoreMap);
+
+    assert.strictEqual(restoreMap.size, 0, 'Should clear all pending restores');
+    assert.deepStrictEqual(added, [...bps1, ...bps2], 'Should restore breakpoints from all sessions');
+  });
+
+  test('cancelAllPendingRestores is a no-op when nothing is pending', () => {
+    const restoreMap = new Map<string, readonly any[]>();
+    const { deps, added, removed } = makeRestoreDeps();
+
+    cancelAllPendingRestores(deps, restoreMap);
+
+    assert.strictEqual(restoreMap.size, 0, 'Map should remain empty');
+    assert.strictEqual(added.length, 0, 'Should not add any breakpoints');
+    assert.strictEqual(removed.length, 0, 'Should not remove any breakpoints');
   });
 });
