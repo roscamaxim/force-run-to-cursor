@@ -2,7 +2,7 @@
   "name": "force-run-to-cursor",
   "displayName": "Force Run to Cursor",
   "description": "Runs to the cursor without hitting breakpoints — automatically disables breakpoints before running and restores them when the debugger stops. A JetBrains-style \"Force Run to Cursor\" for VS Code.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "license": "MIT",
   "publisher": "roscamaxim",
   "repository": {
@@ -52,6 +52,15 @@
         }
       },
       {
+        "command": "runToCursor.forceRunning",
+        "title": "Force Run to Cursor (Unavailable)",
+        "category": "Debug",
+        "icon": {
+          "light": "media/light/force-run-to-cursor-disabled.svg",
+          "dark": "media/dark/force-run-to-cursor-disabled.svg"
+        }
+      },
+      {
         "command": "runToCursor.cancelForceRun",
         "title": "Cancel Force Run (Restore Breakpoints)",
         "category": "Debug"
@@ -66,24 +75,45 @@
         },
         {
           "command": "runToCursor.force",
-          "when": "inDebugMode",
+          "when": "inDebugMode && debugState == 'stopped'",
+          "group": "navigation@2"
+        },
+        {
+          "command": "runToCursor.forceRunning",
+          "when": "inDebugMode && debugState != 'stopped'",
           "group": "navigation@2"
         }
       ],
       "editor/context": [
         {
           "command": "runToCursor.force",
-          "when": "inDebugMode",
+          "when": "inDebugMode && debugState == 'stopped'",
           "group": "debug@3"
         }
       ],
       "commandPalette": [
         {
+          "command": "runToCursor.run",
+          "when": "false"
+        },
+        {
+          "command": "runToCursor.forceRunning",
+          "when": "false"
+        },
+        {
           "command": "runToCursor.cancelForceRun",
           "when": "forceRunToCursor.isActive"
         }
       ]
-    }
+    },
+    "keybindings": [
+      {
+        "command": "runToCursor.force",
+        "key": "ctrl+alt+f10",
+        "mac": "ctrl+alt+f10",
+        "when": "inDebugMode && debugState == 'stopped'"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run bundle",

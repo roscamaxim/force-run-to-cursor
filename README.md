@@ -23,24 +23,25 @@ A tiny VS Code extension that adds **Debug: Force Run to Cursor** — run until 
 1. Start debugging and **pause** (hit any breakpoint).
 2. Put the caret on the line where you want execution to stop.
 3. Use any of:
+   - Press **Ctrl+Alt+F10** (default keybinding)
    - Click the **toolbar button** in the debug toolbar
    - **Right-click** in the editor and select **Force Run to Cursor**
    - **Command Palette** → `Debug: Force Run to Cursor`
 
 To cancel a force-run in progress and restore breakpoints immediately:
 
-- Click the **Force Run Active** status bar item
+- Click the **Force Run Active** status bar item, or
 - **Command Palette** → `Debug: Cancel Force Run (Restore Breakpoints)`
 
-### Optional: Keybinding
+### Keybinding
 
-Add a shortcut in `keybindings.json`:
+The default keybinding is **Ctrl+Alt+F10** (available during active debug sessions). To customize it, add an override in `keybindings.json`:
 
-```json
+```jsonc
 {
-  "key": "cmd+alt+f9",
+  "key": "cmd+alt+f9", // your preferred shortcut
   "command": "runToCursor.force",
-  "when": "inDebugMode && editorTextFocus"
+  "when": "inDebugMode && debugState == 'stopped'",
 }
 ```
 
@@ -53,6 +54,15 @@ This extension does not contribute any settings.
 - Toolbar buttons appear before the built-in debug buttons (VS Code does not allow intermixing extension buttons with built-in ones).
 
 ## Release Notes
+
+### 0.3.1
+
+- Add default keybinding **Ctrl+Alt+F10** — now works in all debug states, not just when paused
+- Add "Force Run to Cursor" output channel for troubleshooting debug adapter issues
+- Fix: breakpoints are now reliably restored when the extension is disabled or VS Code reloads during a force-run
+- Fix: cancelling a force-run now fully restores breakpoints before updating the UI
+- Improve reliability when debug adapters fail to respond
+- UI: the Force Run toolbar button is greyed out while the debugger is running
 
 ### 0.3.0
 
